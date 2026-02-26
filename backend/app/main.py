@@ -1,24 +1,33 @@
-import sys
 from PyQt6.QtWidgets import QApplication
-from sqlalchemy import text
-
 from app.ui.main_window import MainWindow
-from app.db.database import engine
-
-def test_db_connection():
-    # Simple query to verify MySQL connection
-    with engine.connect() as conn:
-        conn.execute(text("SELECT 1"))
+from app.ui.login_window import LoginWindow
+from app.db.database import SessionLocal
+from app.auth.login_service import authenticate_user
 
 def main():
-    # 1) Verify DB first (fast fail if config is wrong)
-    test_db_connection()
+    app = QApplication([])
 
-    # 2) Start UI
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+    db = SessionLocal()
+
+    def handle_login():
+        username = login_window.username.text()
+        password = login_window.password.text()
+
+        user = authenticate_user(db, username, password)
+
+        if user:
+            login_window.close()
+            main_window = MainWindow(user.role)
+            main_window.show()
+        else:
+            print("Login failed")
+
+    login_window = LoginWindow(on_login_success=handle_login)
+    login_window.login_btn.clicked.connect(handle_login)
+
+    login_window.show()
+    app.exec()
+
 
 if __name__ == "__main__":
     main()
