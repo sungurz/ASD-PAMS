@@ -1,4 +1,6 @@
 """
+app/ui/add_apartment_dialog.py
+================================
 Two dialogs:
   AddApartmentDialog  — register or edit a single apartment unit.
   AddPropertyDialog   — register a new property (building) in a city.
@@ -14,11 +16,11 @@ from app.db.models import Apartment, Property, City, ApartmentType, ApartmentSta
 
 
 APARTMENT_TYPES = [
-    ("Studio",          "studio"),
-    ("1 Bedroom",       "one_bed"),
-    ("2 Bedroom",       "two_bed"),
-    ("3 Bedroom",       "three_bed"),
-    ("4 Bedroom",       "four_bed"),
+    ("Studio",      "studio"),
+    ("1 Bedroom",   "one_bed"),
+    ("2 Bedroom",   "two_bed"),
+    ("3 Bedroom",   "three_bed"),
+    ("4 Bedroom",   "four_bed"),
 ]
 
 APARTMENT_STATUSES = [
@@ -49,14 +51,26 @@ class AddApartmentDialog(tb.Toplevel):
 
     # ── UI ────────────────────────────────────────────────────────────────
     def _build_ui(self):
-        self.geometry("460x520")
+        self.geometry("460x540")
+
+        # Buttons FIRST — anchors to bottom before content expands
+        btn_row = tb.Frame(self, padding=(24, 0, 24, 16))
+        btn_row.pack(side=BOTTOM, fill=X)
+        tb.Button(btn_row, text="Cancel", bootstyle="secondary",
+                  command=self.destroy).pack(side=RIGHT, padx=(6, 0))
+        tb.Button(btn_row,
+                  text="Save Changes" if self.editing else "Add Apartment",
+                  bootstyle="success",
+                  command=self._submit).pack(side=RIGHT)
+
+        # Form content
         f = tb.Frame(self, padding=24)
         f.pack(fill=BOTH, expand=YES)
 
         tb.Label(f, text="Edit Apartment" if self.editing else "Add New Apartment",
                  font=("Georgia", 16, "bold")).pack(anchor=W, pady=(0, 16))
 
-        # Property (building) selector
+        # Property selector
         self._lbl(f, "Property / Building *")
         properties = self._load_properties()
         self.v_property = tb.StringVar()
@@ -71,7 +85,7 @@ class AddApartmentDialog(tb.Toplevel):
         )
         self._prop_combo.pack(fill=X, pady=(2, 12))
 
-        # Unit number and floor side by side
+        # Unit number and floor
         row = tb.Frame(f)
         row.pack(fill=X, pady=(0, 12))
         left = tb.Frame(row)
@@ -87,7 +101,7 @@ class AddApartmentDialog(tb.Toplevel):
         self.v_floor = tb.Entry(right, font=("Helvetica", 12))
         self.v_floor.pack(fill=X, pady=(2, 0))
 
-        # Type and rooms side by side
+        # Type and rooms
         row2 = tb.Frame(f)
         row2.pack(fill=X, pady=(0, 12))
         left2 = tb.Frame(row2)
@@ -105,12 +119,12 @@ class AddApartmentDialog(tb.Toplevel):
         self.v_rooms = tb.Entry(right2, font=("Helvetica", 12))
         self.v_rooms.pack(fill=X, pady=(2, 0))
 
-        # Monthly rent
+        # Rent
         self._lbl(f, "Monthly Rent (£) *")
         self.v_rent = tb.Entry(f, font=("Helvetica", 12))
         self.v_rent.pack(fill=X, pady=(2, 12))
 
-        # Status (edit only / admin)
+        # Status
         self._lbl(f, "Status")
         self.v_status = tb.StringVar(value="Available")
         tb.Combobox(f, textvariable=self.v_status,
@@ -121,16 +135,6 @@ class AddApartmentDialog(tb.Toplevel):
         self._lbl(f, "Description (optional)")
         self.v_desc = tb.Entry(f, font=("Helvetica", 12))
         self.v_desc.pack(fill=X, pady=(2, 0))
-
-        # Buttons
-        btn_row = tb.Frame(f)
-        btn_row.pack(fill=X, pady=(20, 0))
-        tb.Button(btn_row, text="Cancel", bootstyle="secondary",
-                  command=self.destroy).pack(side=RIGHT, padx=(6, 0))
-        tb.Button(btn_row,
-                  text="Save Changes" if self.editing else "Add Apartment",
-                  bootstyle="success",
-                  command=self._submit).pack(side=RIGHT)
 
     # ── Helpers ───────────────────────────────────────────────────────────
     def _lbl(self, parent, text):
@@ -161,14 +165,13 @@ class AddApartmentDialog(tb.Toplevel):
 
     def _center(self, parent):
         self.update_idletasks()
-        w, h = 460, 520
+        w, h = 460, 540
         px = parent.winfo_rootx() + (parent.winfo_width()  - w) // 2
         py = parent.winfo_rooty() + (parent.winfo_height() - h) // 2
         self.geometry(f"{w}x{h}+{px}+{py}")
 
     # ── Populate (edit mode) ──────────────────────────────────────────────
     def _populate(self, apt: Apartment):
-        # Set property
         for label, pid in self._property_map.items():
             if pid == apt.property_id:
                 self.v_property.set(label)
@@ -182,12 +185,10 @@ class AddApartmentDialog(tb.Toplevel):
             self.v_rent.insert(0, str(apt.monthly_rent))
         if apt.description:
             self.v_desc.insert(0, apt.description)
-        # Type
         for lbl, val in APARTMENT_TYPES:
             if apt.apartment_type and apt.apartment_type.value == val:
                 self.v_type.set(lbl)
                 break
-        # Status
         for lbl, val in APARTMENT_STATUSES:
             if apt.status and apt.status.value == val:
                 self.v_status.set(lbl)
@@ -229,6 +230,7 @@ class AddApartmentDialog(tb.Toplevel):
 
         try:
             if self.editing:
+                from sqlalchemy.orm import joinedload
                 apt = self.db.query(Apartment).filter(Apartment.id == self.apartment.id).first()
                 apt.property_id    = property_id
                 apt.unit_number    = unit
@@ -240,7 +242,6 @@ class AddApartmentDialog(tb.Toplevel):
                 apt.description    = desc or None
                 self.db.commit()
                 Messagebox.show_info("Apartment updated!", title="Success", parent=self)
-                self.destroy()
             else:
                 new_apt = Apartment(
                     property_id    = property_id,
@@ -278,7 +279,17 @@ class AddPropertyDialog(tb.Toplevel):
         self._center(parent)
 
     def _build_ui(self):
-        self.geometry("420x420")
+        self.geometry("420x400")
+
+        # Buttons FIRST — anchors to bottom
+        btn_row = tb.Frame(self, padding=(24, 0, 24, 16))
+        btn_row.pack(side=BOTTOM, fill=X)
+        tb.Button(btn_row, text="Cancel", bootstyle="secondary",
+                  command=self.destroy).pack(side=RIGHT, padx=(6, 0))
+        tb.Button(btn_row, text="Add Property", bootstyle="success",
+                  command=self._submit).pack(side=RIGHT)
+
+        # Form content
         f = tb.Frame(self, padding=24)
         f.pack(fill=BOTH, expand=YES)
 
@@ -309,16 +320,9 @@ class AddPropertyDialog(tb.Toplevel):
         self.v_postcode = tb.Entry(f, font=("Helvetica", 12))
         self.v_postcode.pack(fill=X, pady=(2, 0))
 
-        btn_row = tb.Frame(f)
-        btn_row.pack(fill=X, pady=(20, 0))
-        tb.Button(btn_row, text="Cancel", bootstyle="secondary",
-                  command=self.destroy).pack(side=RIGHT, padx=(6, 0))
-        tb.Button(btn_row, text="Add Property", bootstyle="success",
-                  command=self._submit).pack(side=RIGHT)
-
     def _center(self, parent):
         self.update_idletasks()
-        w, h = 420, 420
+        w, h = 420, 400
         px = parent.winfo_rootx() + (parent.winfo_width()  - w) // 2
         py = parent.winfo_rooty() + (parent.winfo_height() - h) // 2
         self.geometry(f"{w}x{h}+{px}+{py}")

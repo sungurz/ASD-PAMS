@@ -1,8 +1,7 @@
 """
+app/ui/apartments_page.py
+==========================
 Apartment inventory management page.
-Lists all apartments grouped by city/property,
-shows occupancy status with colour badges,
-and allows adding new apartments and properties.
 """
 
 import ttkbootstrap as tb
@@ -33,7 +32,14 @@ class ApartmentsPage(tb.Frame):
         self._build_ui()
         self.load_apartments()
 
-    # ── UI 
+    def destroy(self):
+        try:
+            self.db.close()
+        except Exception:
+            pass
+        super().destroy()
+
+    # ── UI ────────────────────────────────────────────────────────────────
     def _build_ui(self):
         header = tb.Frame(self, padding=(20, 16, 20, 8))
         header.pack(fill=X)
@@ -59,7 +65,6 @@ class ApartmentsPage(tb.Frame):
 
         tb.Separator(self, orient=HORIZONTAL).pack(fill=X, padx=20)
 
-        # Filters
         filter_bar = tb.Frame(self, padding=(20, 10, 20, 4))
         filter_bar.pack(fill=X)
 
@@ -73,7 +78,6 @@ class ApartmentsPage(tb.Frame):
         self._city_combo.pack(side=LEFT, padx=(6, 16))
         self._city_combo.bind("<<ComboboxSelected>>", lambda _: self.load_apartments())
 
-        # Status filter
         self._status_var = tb.StringVar(value="All")
         tb.Label(filter_bar, text="Status:", font=("Helvetica", 11)).pack(side=LEFT)
         tb.Combobox(
@@ -83,11 +87,10 @@ class ApartmentsPage(tb.Frame):
         ).pack(side=LEFT, padx=(6, 0))
         self._status_var.trace_add("write", lambda *_: self.load_apartments())
 
-        # Table
         table_frame = tb.Frame(self, padding=(20, 8, 20, 0))
         table_frame.pack(fill=BOTH, expand=YES)
 
-        cols = ("id", "property", "city", "unit", "floor", "type", "rooms", "rent", "status")
+        cols = ("id", "property", "city", "unit", "floor", "type", "status", "rooms", "rent")
         self.tree = tb.Treeview(
             table_frame, columns=cols, show="headings",
             bootstyle="dark", selectmode="browse",
@@ -95,14 +98,14 @@ class ApartmentsPage(tb.Frame):
 
         col_cfg = [
             ("id",       "ID",       50,  CENTER),
-            ("property", "Property", 200, W),
-            ("city",     "City",     110, CENTER),
-            ("unit",     "Unit",     80,  CENTER),
-            ("floor",    "Floor",    60,  CENTER),
-            ("type",     "Type",     110, CENTER),
-            ("rooms",    "Rooms",    60,  CENTER),
+            ("property", "Property", 180, W),
+            ("city",     "City",     100, CENTER),
+            ("unit",     "Unit",     70,  CENTER),
+            ("floor",    "Floor",    55,  CENTER),
+            ("type",     "Type",     100, CENTER),
+            ("status",   "Status",   100, CENTER),
+            ("rooms",    "Rooms",    55,  CENTER),
             ("rent",     "Rent/mo",  90,  CENTER),
-            ("status",   "Status",   110, CENTER),
         ]
         for col_id, heading, width, anchor in col_cfg:
             self.tree.heading(col_id, text=heading, anchor=anchor)
@@ -125,18 +128,16 @@ class ApartmentsPage(tb.Frame):
             anchor=E, padx=24, pady=(4, 10)
         )
 
-    # ── Data 
+    # ── Data ──────────────────────────────────────────────────────────────
     def _load_city_names(self) -> list[str]:
         cities = self.db.query(City).filter(City.is_active == True).order_by(City.name).all()
         return [c.name for c in cities]
 
     def load_apartments(self, *_):
-        self.db.close()
-        self.db=SessionLocal()
+        self.db.expire_all()
         for row in self.tree.get_children():
             self.tree.delete(row)
 
-        # Build query without joinedload — use plain joins for filtering
         q = (
             self.db.query(Apartment, Property, City)
             .join(Property, Apartment.property_id == Property.id)
@@ -185,7 +186,7 @@ class ApartmentsPage(tb.Frame):
             return None
         return int(self.tree.item(sel[0])["values"][0])
 
-    # ── Actions
+    # ── Actions ───────────────────────────────────────────────────────────
     def _open_add_dialog(self):
         from app.ui.add_apartment_dialog import AddApartmentDialog
         dlg = AddApartmentDialog(self, user=self.user)
@@ -203,9 +204,8 @@ class ApartmentsPage(tb.Frame):
         if apt_id is None:
             Messagebox.show_warning("Please select an apartment to edit.", title="No Selection")
             return
-        apt = self.db.query(Apartment).options(
-            joinedload(Apartment.property)
-        ).filter(Apartment.id == apt_id).first()
+        self.db.expire_all()
+        apt = self.db.query(Apartment).filter(Apartment.id == apt_id).first()
         if not apt:
             return
         from app.ui.add_apartment_dialog import AddApartmentDialog

@@ -1,7 +1,7 @@
 """
-Tenant management page — lists all tenants with search,
-shows their current lease status, and provides actions
-for registering, editing, and archiving tenants.
+app/ui/tenants_page.py
+=======================
+Tenant management page.
 """
 
 import ttkbootstrap as tb
@@ -14,13 +14,6 @@ from app.services.tenant_service import search_tenants, archive_tenant
 from sqlalchemy.orm import joinedload
 
 
-STATUS_COLORS = {
-    "Active":   "success",
-    "Inactive": "secondary",
-    "Leased":   "primary",
-}
-
-
 class TenantsPage(tb.Frame):
     """Tenant management page."""
 
@@ -31,9 +24,15 @@ class TenantsPage(tb.Frame):
         self._build_ui()
         self.load_tenants()
 
-    # ── UI 
+    def destroy(self):
+        try:
+            self.db.close()
+        except Exception:
+            pass
+        super().destroy()
+
+    # ── UI ────────────────────────────────────────────────────────────────
     def _build_ui(self):
-        # ── Header ──
         header = tb.Frame(self, padding=(20, 16, 20, 8))
         header.pack(fill=X)
 
@@ -65,7 +64,6 @@ class TenantsPage(tb.Frame):
 
         tb.Separator(self, orient=HORIZONTAL).pack(fill=X, padx=20)
 
-        # ── Search bar ──
         search_bar = tb.Frame(self, padding=(20, 10, 20, 4))
         search_bar.pack(fill=X)
 
@@ -75,7 +73,6 @@ class TenantsPage(tb.Frame):
         tb.Entry(search_bar, textvariable=self._search_var,
                  font=("Helvetica", 12), width=36).pack(side=LEFT)
 
-        # Show inactive toggle
         self._show_inactive = tb.BooleanVar(value=False)
         tb.Checkbutton(
             search_bar, text="Show inactive",
@@ -83,7 +80,6 @@ class TenantsPage(tb.Frame):
             command=self.load_tenants,
         ).pack(side=LEFT, padx=(16, 0))
 
-        # ── Table ──
         table_frame = tb.Frame(self, padding=(20, 6, 20, 0))
         table_frame.pack(fill=BOTH, expand=YES)
 
@@ -94,18 +90,17 @@ class TenantsPage(tb.Frame):
         )
 
         col_cfg = [
-            ("id",           "ID",            50,  CENTER),
-            ("full_name",    "Full Name",      200, W),
-            ("email",        "Email",          200, W),
-            ("phone",        "Phone",          120, CENTER),
-            ("lease_status", "Lease Status",   120, CENTER),
-            ("apartment",    "Unit",           120, CENTER),
+            ("id",           "ID",           50,  CENTER),
+            ("full_name",    "Full Name",     200, W),
+            ("email",        "Email",         200, W),
+            ("phone",        "Phone",         120, CENTER),
+            ("lease_status", "Lease Status",  120, CENTER),
+            ("apartment",    "Unit",          120, CENTER),
         ]
         for col_id, heading, width, anchor in col_cfg:
             self.tree.heading(col_id, text=heading, anchor=anchor)
             self.tree.column(col_id, width=width, anchor=anchor, minwidth=40)
 
-        # Tag colours for lease status
         self.tree.tag_configure("leased",   foreground="#2ECC71")
         self.tree.tag_configure("unleased", foreground="#7F8C8D")
         self.tree.tag_configure("inactive", foreground="#E74C3C")
@@ -116,32 +111,27 @@ class TenantsPage(tb.Frame):
         self.tree.pack(side=LEFT, fill=BOTH, expand=YES)
         scrollbar.pack(side=RIGHT, fill=Y)
 
-        # Double-click to view detail
         self.tree.bind("<Double-1>", lambda _: self._view_selected())
 
-        # Footer
         self._count_var = tb.StringVar()
         tb.Label(self, textvariable=self._count_var,
                  font=("Helvetica", 10), bootstyle="secondary").pack(
             anchor=E, padx=24, pady=(4, 10)
         )
 
-    # ── Data 
+    # ── Data ──────────────────────────────────────────────────────────────
     def load_tenants(self, *_):
-        self.db.close()
-        self.db=SessionLocal()
+        self.db.expire_all()
         for row in self.tree.get_children():
             self.tree.delete(row)
 
-        query     = self._search_var.get().strip()
+        query       = self._search_var.get().strip()
         active_only = not self._show_inactive.get()
+        tenants     = search_tenants(self.db, query=query, active_only=active_only)
 
-        tenants = search_tenants(self.db, query=query, active_only=active_only)
-
-        # Eager-load leases for each tenant efficiently
         if tenants:
             ids = [t.id for t in tenants]
-            from app.db.models import LeaseAgreement, LeaseStatus, Apartment
+            from app.db.models import LeaseAgreement, LeaseStatus
             active_leases = {
                 la.tenant_id: la
                 for la in self.db.query(LeaseAgreement)
@@ -171,12 +161,7 @@ class TenantsPage(tb.Frame):
                 tag         = "unleased"
 
             self.tree.insert("", END, tags=(tag,), values=(
-                t.id,
-                t.full_name,
-                t.email,
-                t.phone,
-                status_text,
-                unit_text,
+                t.id, t.full_name, t.email, t.phone, status_text, unit_text,
             ))
 
         self._count_var.set(f"{len(tenants)} tenant(s)")
@@ -187,7 +172,7 @@ class TenantsPage(tb.Frame):
             return None
         return int(self.tree.item(sel[0])["values"][0])
 
-    # ── Actions
+    # ── Actions ───────────────────────────────────────────────────────────
     def _open_add_dialog(self):
         from app.ui.add_tenant_dialog import AddTenantDialog
         dlg = AddTenantDialog(self, user=self.user)
@@ -200,6 +185,7 @@ class TenantsPage(tb.Frame):
             Messagebox.show_warning("Please select a tenant to edit.", title="No Selection")
             return
         from app.ui.add_tenant_dialog import AddTenantDialog
+        self.db.expire_all()
         tenant = self.db.query(Tenant).filter(Tenant.id == tid).first()
         if not tenant:
             return
@@ -228,7 +214,6 @@ class TenantsPage(tb.Frame):
             self.load_tenants()
 
     def _view_selected(self):
-        """Double-click — open edit dialog for now (detail view in later sprint)."""
         tid = self._selected_tenant_id()
         if tid is None:
             return

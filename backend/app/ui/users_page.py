@@ -1,11 +1,7 @@
 """
+app/ui/users_page.py
+====================
 Staff account management page.
-
-Sprint 2 changes:
-  - Accepts user context so we can scope what actions are available.
-  - Table now shows City column alongside Role.
-  - Role displayed as clean string (e.g. "Location Admin") not enum repr.
-  - Edit and Delete buttons respect user.has_permission().
 """
 
 import ttkbootstrap as tb
@@ -23,14 +19,20 @@ class UsersPage(tb.Frame):
 
     def __init__(self, parent, user):
         super().__init__(parent)
-        self.user = user          # _UserContext
-        self.db = SessionLocal()
+        self.user = user
+        self.db   = SessionLocal()
         self._build_ui()
         self.load_users()
 
-    # ── UI ─────────────────
+    def destroy(self):
+        try:
+            self.db.close()
+        except Exception:
+            pass
+        super().destroy()
+
+    # ── UI ────────────────────────────────────────────────────────────────
     def _build_ui(self):
-        # Header row
         header = tb.Frame(self, padding=(20, 16, 20, 8))
         header.pack(fill=X)
 
@@ -57,7 +59,6 @@ class UsersPage(tb.Frame):
 
         tb.Separator(self, orient=HORIZONTAL).pack(fill=X, padx=20)
 
-        # Table
         table_frame = tb.Frame(self, padding=(20, 12, 20, 0))
         table_frame.pack(fill=BOTH, expand=YES)
 
@@ -85,17 +86,15 @@ class UsersPage(tb.Frame):
         self.tree.pack(side=LEFT, fill=BOTH, expand=YES)
         scrollbar.pack(side=RIGHT, fill=Y)
 
-        # Footer
         self._count_var = tb.StringVar()
         tb.Label(self, textvariable=self._count_var,
                  font=("Helvetica", 10), bootstyle="secondary").pack(
             anchor=E, padx=24, pady=(4, 10)
         )
 
-    # ── Data ─
+    # ── Data ──────────────────────────────────────────────────────────────
     def load_users(self):
-        self.db.close()
-        self.db=SessionLocal()
+        self.db.expire_all()
         for row in self.tree.get_children():
             self.tree.delete(row)
 
@@ -130,12 +129,11 @@ class UsersPage(tb.Frame):
             return None
         return int(self.tree.item(sel[0])["values"][0])
 
-    # ── Dialogs ─
+    # ── Dialogs ───────────────────────────────────────────────────────────
     def _open_add_dialog(self):
         from app.ui.add_user_dialog import AddUserDialog
         dlg = AddUserDialog(self, user=self.user)
         self.wait_window(dlg)
-        self.db.rollback()
         self.load_users()
 
     def _edit_selected(self):
@@ -146,6 +144,7 @@ class UsersPage(tb.Frame):
             Messagebox.show_warning("Please select a user to edit.", title="No Selection")
             return
 
+        self.db.expire_all()
         user = (
             self.db.query(User)
             .options(joinedload(User.role), joinedload(User.city))
@@ -158,9 +157,7 @@ class UsersPage(tb.Frame):
         dlg = AddUserDialog(self, editing=True, user=self.user)
         dlg.username_input.insert(0, user.username)
         dlg.full_name_input.insert(0, user.full_name or "")
-        dlg.role_var.set(
-            user.role.name.value if user.role else "front_desk"
-        )
+        dlg.role_var.set(user.role.name.value if user.role else "front_desk")
         if user.city:
             dlg.city_var.set(user.city.name)
         self.wait_window(dlg)
@@ -168,7 +165,6 @@ class UsersPage(tb.Frame):
         if not dlg.submitted:
             return
 
-        # Uniqueness check
         existing = (
             self.db.query(User)
             .filter(User.username == dlg.result_username, User.id != user.id)
@@ -215,7 +211,6 @@ class UsersPage(tb.Frame):
             Messagebox.show_warning("Please select a user to delete.", title="No Selection")
             return
 
-        # Prevent deleting yourself
         if uid == self.user.id:
             Messagebox.show_warning("You cannot delete your own account.", title="Not Allowed")
             return

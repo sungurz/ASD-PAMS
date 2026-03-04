@@ -1,6 +1,4 @@
 """
-app/ui/main_window.py
-=====================
 Main dashboard shell.
 
 Sprint 2 changes:
@@ -119,9 +117,10 @@ class MainWindow(tb.Frame):
             from app.ui.apartments_page import ApartmentsPage
             self._pages["apartments"] = ApartmentsPage(self.content, user=self.user)
 
-        # Finance — permission gated (Sprint 4)
+        # Finance — Sprint 4
         if self.user.has_permission("invoice.view"):
-            self._pages["finance"] = self._make_placeholder("Finance", "Sprint 4")
+            from app.ui.finance_page import FinancePage
+            self._pages["finance"] = FinancePage(self.content, user=self.user)
 
         # Maintenance — permission gated (Sprint 5)
         if self.user.has_permission("maintenance.view"):
@@ -187,7 +186,7 @@ class MainWindow(tb.Frame):
         if name in self._pages:
             self._pages[name].pack(fill=BOTH, expand=YES)
 
-    # ── Logout ────────────────────────────────────────────────────────────
+    # ── Logout 
     def _logout(self):
         self.destroy()
         self.show_login_callback()
