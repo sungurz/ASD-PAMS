@@ -94,6 +94,8 @@ class UsersPage(tb.Frame):
 
     # ── Data ─
     def load_users(self):
+        self.db.close()
+        self.db=SessionLocal()
         for row in self.tree.get_children():
             self.tree.delete(row)
 
