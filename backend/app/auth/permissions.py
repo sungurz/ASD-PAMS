@@ -1,6 +1,4 @@
 """
-app/auth/permissions.py
-=======================
 Central permission checking for Paragon.
 
 Usage:

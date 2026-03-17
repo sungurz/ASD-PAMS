@@ -75,7 +75,7 @@ class PaymentDialog(tb.Toplevel):
         # Invoice details display
         self._inv_detail = tb.StringVar(value="Select an invoice above")
         tb.Label(f, textvariable=self._inv_detail, font=("Helvetica", 10),
-                 bootstyle="info").pack(anchor=W, pady=(0, 12))
+                 bootstyle="info", justify=LEFT, wraplength=400).pack(anchor=W, pady=(0, 12))
 
         # Amount
         lbl("Amount (£) *")
@@ -134,10 +134,21 @@ class PaymentDialog(tb.Toplevel):
             .order_by(Invoice.due_date)
             .all()
         )
+        from app.db.models import Payment as _Pay
+        from sqlalchemy import func as _func
+        from decimal import Decimal as _Dec
+        paid_rows = (
+            self.db.query(_Pay.invoice_id, _func.sum(_Pay.amount))
+            .group_by(_Pay.invoice_id)
+            .all()
+        )
+        paid_map = {row[0]: row[1] or _Dec("0") for row in paid_rows}
+
         self._invoice_map = {}
         for inv in invoices:
             tenant_name = inv.tenant.full_name if inv.tenant else "Unknown"
-            label = f"{inv.invoice_number} — {tenant_name}  £{inv.amount:,.2f}"
+            remaining = max(inv.amount - paid_map.get(inv.id, _Dec("0")), _Dec("0"))
+            label = f"{inv.invoice_number} — {tenant_name}  (Balance: £{remaining:,.2f})"
             self._invoice_map[label] = inv.id
         self._inv_combo.configure(values=list(self._invoice_map.keys()))
 
@@ -155,14 +166,25 @@ class PaymentDialog(tb.Toplevel):
         inv_id = self._invoice_map[label]
         inv = self.db.query(Invoice).filter(Invoice.id == inv_id).first()
         if inv:
+            from app.db.models import Payment as _Pay
+            from sqlalchemy import func as _func
+            from decimal import Decimal as _Dec
+            already_paid = (
+                self.db.query(_func.sum(_Pay.amount))
+                .filter(_Pay.invoice_id == inv_id)
+                .scalar() or _Dec("0")
+            )
+            remaining = max(inv.amount - already_paid, _Dec("0"))
+            # Pre-fill amount with remaining balance
             self.v_amount.delete(0, END)
-            self.v_amount.insert(0, str(inv.amount))
+            self.v_amount.insert(0, str(remaining))
             period = ""
-            if inv.billing_period_start:
-                period = f" | Period: {inv.billing_period_start.strftime('%b %Y')}"
+            if inv.billing_period_start and inv.billing_period_end:
+                period = (f"{inv.billing_period_start.strftime('%d %b')} – "
+                          f"{inv.billing_period_end.strftime('%d %b %Y')}")
             self._inv_detail.set(
-                f"Due: {inv.due_date.strftime('%d %b %Y') if inv.due_date else '—'}"
-                f"  |  Status: {inv.status.value.title()}{period}"
+                f"Total: £{inv.amount:,.2f}  |  Paid: £{already_paid:,.2f}  |  Remaining: £{remaining:,.2f}"
+                + (f"\nPeriod: {period}" if period else "")
             )
 
     def _toggle_card_fields(self, *_):

@@ -31,6 +31,16 @@ class UsersPage(tb.Frame):
             pass
         super().destroy()
 
+    def _refresh_db(self):
+        """Close and recreate the session to avoid MySQL REPEATABLE READ caching."""
+        try:
+            self.db.close()
+        except Exception:
+            pass
+        from app.db.database import SessionLocal
+        self.db = SessionLocal()
+
+
     # ── UI ────────────────────────────────────────────────────────────────
     def _build_ui(self):
         header = tb.Frame(self, padding=(20, 16, 20, 8))
@@ -94,7 +104,7 @@ class UsersPage(tb.Frame):
 
     # ── Data ──────────────────────────────────────────────────────────────
     def load_users(self):
-        self.db.expire_all()
+        self._refresh_db()
         for row in self.tree.get_children():
             self.tree.delete(row)
 
@@ -144,7 +154,7 @@ class UsersPage(tb.Frame):
             Messagebox.show_warning("Please select a user to edit.", title="No Selection")
             return
 
-        self.db.expire_all()
+        self._refresh_db()
         user = (
             self.db.query(User)
             .options(joinedload(User.role), joinedload(User.city))

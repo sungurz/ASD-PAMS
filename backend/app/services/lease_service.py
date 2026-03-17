@@ -1,5 +1,6 @@
 """
-
+app/services/lease_service.py
+==============================
 Business logic for lease lifecycle management.
 
 Rules enforced here (not in the DB):
@@ -20,7 +21,7 @@ from app.db.models import (
 )
 
 
-# ── Queries
+# ── Queries ───────────────────────────────────────────────────────────────────
 
 def get_active_lease(db: Session, apartment_id: int) -> LeaseAgreement | None:
     """Return the current ACTIVE lease for an apartment, or None."""
@@ -58,7 +59,7 @@ def get_lease_history(db: Session, apartment_id: int) -> list[LeaseAgreement]:
     )
 
 
-# ── Core operations 
+# ── Core operations ───────────────────────────────────────────────────────────
 
 def create_lease(
     db: Session,
@@ -138,6 +139,12 @@ def end_lease(
     apartment = db.query(Apartment).filter(Apartment.id == lease.apartment_id).first()
     if apartment:
         apartment.status = ApartmentStatus.AVAILABLE
+
+    # Cancel open maintenance tickets for this apartment
+    from app.services.maintenance_service import cancel_open_tickets_for_apartment
+    from app.services.invoice_service import void_invoices_for_lease
+    cancel_open_tickets_for_apartment(db, lease.apartment_id)
+    void_invoices_for_lease(db, lease.id)
 
     db.commit()
     return True, ""
@@ -224,6 +231,11 @@ def approve_termination(
         apartment = db.query(Apartment).filter(Apartment.id == lease.apartment_id).first()
         if apartment:
             apartment.status = ApartmentStatus.AVAILABLE
+        # Void all unpaid invoices and cancel open maintenance tickets
+        from app.services.invoice_service import void_invoices_for_lease
+        from app.services.maintenance_service import cancel_open_tickets_for_apartment
+        void_invoices_for_lease(db, lease.id)
+        cancel_open_tickets_for_apartment(db, lease.apartment_id)
 
     db.commit()
     return True, ""

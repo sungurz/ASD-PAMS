@@ -1,5 +1,8 @@
 """
+app/services/invoice_service.py
+================================
 Business logic for invoice generation and lifecycle.
+
 Rules:
   - One invoice per lease per billing period (no duplicates).
   - Invoice number format: INV-YYYY-NNNN (e.g. INV-2026-0042).
@@ -17,7 +20,10 @@ from app.db.models import (
     Invoice, InvoiceStatus, LeaseAgreement, LeaseStatus,
     Tenant, LatePaymentAlert
 )
-# ── Number generation
+
+
+# ── Number generation ─────────────────────────────────────────────────────────
+
 def _next_invoice_number(db: Session) -> str:
     year = date.today().year
     prefix = f"INV-{year}-"
@@ -32,7 +38,10 @@ def _next_invoice_number(db: Session) -> str:
     else:
         seq = 1
     return f"{prefix}{seq:04d}"
-# ── Core operations 
+
+
+# ── Core operations ───────────────────────────────────────────────────────────
+
 def generate_invoice(
     db: Session,
     *,
@@ -190,8 +199,45 @@ def void_invoice(db: Session, invoice_id: int) -> tuple[bool, str]:
     if inv.status == InvoiceStatus.PAID:
         return False, "Cannot void a paid invoice."
     inv.status = InvoiceStatus.VOID
+    # Resolve any open late payment alert for this invoice
+    from app.db.models import LatePaymentAlert
+    from datetime import datetime
+    alert = db.query(LatePaymentAlert).filter(
+        LatePaymentAlert.invoice_id == invoice_id,
+        LatePaymentAlert.is_resolved == False,
+    ).first()
+    if alert:
+        alert.is_resolved = True
+        alert.resolved_at = datetime.now()
     db.commit()
     return True, ""
+
+
+def void_invoices_for_lease(db: Session, lease_id: int) -> int:
+    """Void all unpaid invoices for a lease. Called on termination. Returns count voided."""
+    from app.db.models import LatePaymentAlert
+    from datetime import datetime
+    invoices = (
+        db.query(Invoice)
+        .filter(
+            Invoice.lease_id == lease_id,
+            Invoice.status.in_([InvoiceStatus.ISSUED, InvoiceStatus.OVERDUE, InvoiceStatus.DRAFT]),
+        )
+        .all()
+    )
+    count = 0
+    for inv in invoices:
+        inv.status = InvoiceStatus.VOID
+        alert = db.query(LatePaymentAlert).filter(
+            LatePaymentAlert.invoice_id == inv.id,
+            LatePaymentAlert.is_resolved == False,
+        ).first()
+        if alert:
+            alert.is_resolved = True
+            alert.resolved_at = datetime.now()
+        count += 1
+    db.commit()
+    return count
 
 
 def get_invoices_for_tenant(db: Session, tenant_id: int) -> list[Invoice]:

@@ -1,4 +1,6 @@
 """
+app/ui/main_window.py
+=====================
 Main dashboard shell.
 
 Sprint 2 changes:
@@ -122,13 +124,15 @@ class MainWindow(tb.Frame):
             from app.ui.finance_page import FinancePage
             self._pages["finance"] = FinancePage(self.content, user=self.user)
 
-        # Maintenance — permission gated (Sprint 5)
+        # Maintenance — Sprint 5
         if self.user.has_permission("maintenance.view"):
-            self._pages["maintenance"] = self._make_placeholder("Maintenance", "Sprint 5")
+            from app.ui.maintenance_page import MaintenancePage
+            self._pages["maintenance"] = MaintenancePage(self.content, user=self.user)
 
-        # Complaints — permission gated (Sprint 5)
+        # Complaints — Sprint 5
         if self.user.has_permission("complaint.view"):
-            self._pages["complaints"] = self._make_placeholder("Complaints", "Sprint 5")
+            from app.ui.complaints_page import ComplaintsPage
+            self._pages["complaints"] = ComplaintsPage(self.content, user=self.user)
 
         # Reports — permission gated (Sprint 6)
         if self.user.has_permission("report.local"):
@@ -172,7 +176,17 @@ class MainWindow(tb.Frame):
                  font=("Helvetica", 12), bootstyle="secondary").pack(pady=(8, 0))
         return page
 
-    # ── Navigation 
+    # ── Navigation ────────────────────────────────────────────────────────
+    # Map of page name -> load method name
+    _LOAD_METHODS = {
+        "tenants":     "load_tenants",
+        "apartments":  "load_apartments",
+        "users":       "load_users",
+        "finance":     "load_invoices",
+        "maintenance": "load_tickets",
+        "complaints":  "load_complaints",
+    }
+
     def _show_page(self, name: str):
         for page in self._pages.values():
             page.pack_forget()
@@ -184,9 +198,17 @@ class MainWindow(tb.Frame):
                 btn.configure(bootstyle="secondary-outline")
 
         if name in self._pages:
-            self._pages[name].pack(fill=BOTH, expand=YES)
+            page = self._pages[name]
+            page.pack(fill=BOTH, expand=YES)
+            # Refresh data every time the page is shown
+            load_fn = self._LOAD_METHODS.get(name)
+            if load_fn and hasattr(page, load_fn):
+                try:
+                    getattr(page, load_fn)()
+                except Exception:
+                    pass
 
-    # ── Logout 
+    # ── Logout ────────────────────────────────────────────────────────────
     def _logout(self):
         self.destroy()
         self.show_login_callback()

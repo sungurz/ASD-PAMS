@@ -39,6 +39,16 @@ class ApartmentsPage(tb.Frame):
             pass
         super().destroy()
 
+    def _refresh_db(self):
+        """Close and recreate the session to avoid MySQL REPEATABLE READ caching."""
+        try:
+            self.db.close()
+        except Exception:
+            pass
+        from app.db.database import SessionLocal
+        self.db = SessionLocal()
+
+
     # ── UI ────────────────────────────────────────────────────────────────
     def _build_ui(self):
         header = tb.Frame(self, padding=(20, 16, 20, 8))
@@ -134,7 +144,7 @@ class ApartmentsPage(tb.Frame):
         return [c.name for c in cities]
 
     def load_apartments(self, *_):
-        self.db.expire_all()
+        self._refresh_db()
         for row in self.tree.get_children():
             self.tree.delete(row)
 
@@ -144,9 +154,11 @@ class ApartmentsPage(tb.Frame):
             .join(City, Property.city_id == City.id)
         )
 
-        city_filter = self._selected_city.get()
-        if city_filter != "All Cities":
-            q = q.filter(City.name == city_filter)
+        # Scope to user's city if they are city-scoped
+        if self.user.city_id:
+            q = q.filter(City.id == self.user.city_id)
+        elif self._selected_city.get() != "All Cities":
+            q = q.filter(City.name == self._selected_city.get())
 
         status_filter = self._status_var.get()
         if status_filter != "All":
@@ -204,7 +216,7 @@ class ApartmentsPage(tb.Frame):
         if apt_id is None:
             Messagebox.show_warning("Please select an apartment to edit.", title="No Selection")
             return
-        self.db.expire_all()
+        self._refresh_db()
         apt = self.db.query(Apartment).filter(Apartment.id == apt_id).first()
         if not apt:
             return

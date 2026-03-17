@@ -1,4 +1,6 @@
 """
+app/ui/create_lease_dialog.py
+==============================
 Dialog for creating a new lease agreement.
 Front-desk selects:
   - Tenant (searchable)
@@ -43,7 +45,7 @@ class CreateLeaseDialog(tb.Toplevel):
         self._load_tenants(preselected_tenant_id)
         self._load_apartments()
 
-    # ── UI 
+    # ── UI ────────────────────────────────────────────────────────────────
     def _build_ui(self):
         self.geometry("500x560")
         f = tb.Frame(self, padding=24)
@@ -132,8 +134,16 @@ class CreateLeaseDialog(tb.Toplevel):
         tb.Button(btn_row, text="Create Lease", bootstyle="success",
                   command=self._submit).pack(side=RIGHT)
 
-    # ── Data loading
+    # ── Data loading ──────────────────────────────────────────────────────
     def _load_tenants(self, preselect_id: int | None):
+        from app.db.models import LeaseAgreement, LeaseStatus
+        # Find tenants who already have an active lease
+        active_tenant_ids = {
+            row[0] for row in
+            self.db.query(LeaseAgreement.tenant_id)
+            .filter(LeaseAgreement.status == LeaseStatus.ACTIVE)
+            .all()
+        }
         tenants = (
             self.db.query(Tenant)
             .filter(Tenant.is_active == True)
@@ -143,14 +153,23 @@ class CreateLeaseDialog(tb.Toplevel):
         self._tenant_map = {}
         preselect_label = None
         for t in tenants:
-            label = f"{t.full_name} ({t.email})"
-            self._tenant_map[label] = t.id
-            if t.id == preselect_id:
-                preselect_label = label
+            if t.id in active_tenant_ids:
+                label = f"{t.full_name} — already leased"
+                # Still add but mark as already leased so user knows
+            else:
+                label = f"{t.full_name} ({t.email})"
+                self._tenant_map[label] = t.id
+                if t.id == preselect_id:
+                    preselect_label = label
 
         self._tenant_combo.configure(values=list(self._tenant_map.keys()))
         if preselect_label:
             self.v_tenant.set(preselect_label)
+        elif preselect_id and preselect_id in active_tenant_ids:
+            Messagebox.show_warning(
+                "This tenant already has an active lease.",
+                title="Cannot Create Lease", parent=self
+            )
 
     def _load_apartments(self):
         apts = (
@@ -181,7 +200,7 @@ class CreateLeaseDialog(tb.Toplevel):
                 self.v_rent.delete(0, END)
                 self.v_rent.insert(0, str(rent))
 
-    # ── Helpers 
+    # ── Helpers ───────────────────────────────────────────────────────────
     def _parse_date(self, text: str) -> date | None:
         text = text.strip()
         for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
@@ -199,7 +218,7 @@ class CreateLeaseDialog(tb.Toplevel):
         py = parent.winfo_rooty() + (parent.winfo_height() - h) // 2
         self.geometry(f"{w}x{h}+{px}+{py}")
 
-    # ── Submit
+    # ── Submit ────────────────────────────────────────────────────────────
     def _submit(self):
         tenant_label = self.v_tenant.get()
         apt_label    = self.v_apartment.get()

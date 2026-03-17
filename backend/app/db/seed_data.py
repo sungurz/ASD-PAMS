@@ -29,6 +29,7 @@ ROLE_PERMISSIONS = {
         "tenant.create",
         "tenant.view",
         "tenant.update",
+        "tenant.archive",
         "lease.create",
         "lease.view",
         "apartment.view",
@@ -37,6 +38,7 @@ ROLE_PERMISSIONS = {
         "complaint.update",
         "maintenance.create",
         "maintenance.view",
+        "maintenance.update",
         "notification.send",
     ],
     RoleName.FINANCE_MANAGER: [
@@ -56,11 +58,12 @@ ROLE_PERMISSIONS = {
         "lease.view",
     ],
     RoleName.MAINTENANCE_STAFF: [
-        "maintenance.view_assigned",
+        "maintenance.view",
+        "maintenance.create",
         "maintenance.update",
         "maintenance.close",
         "apartment.view",
-        "tenant.view_basic",    # name and unit only, no financials or NI
+        "tenant.view",
     ],
     RoleName.LOCATION_ADMIN: [
         # Full control within their city
@@ -72,7 +75,7 @@ ROLE_PERMISSIONS = {
         "tenant.view",
         "tenant.update",
         "tenant.archive",
-        "tenant.view_ni",       # can see NI number
+        "tenant.view_ni",
         "apartment.create",
         "apartment.view",
         "apartment.update",
@@ -82,37 +85,60 @@ ROLE_PERMISSIONS = {
         "lease.terminate",
         "invoice.create",
         "invoice.view",
+        "invoice.void",
+        "payment.create",
         "payment.view",
+        "maintenance.create",
         "maintenance.view",
+        "maintenance.update",
         "maintenance.assign",
+        "complaint.create",
         "complaint.view",
+        "complaint.update",
         "complaint.assign",
         "report.local",
         "audit_log.view",
         "notification.send",
     ],
     RoleName.MANAGER: [
-        # Cross-city oversight — read-heavy, not operational
+        # Cross-city oversight
         "user.create",
         "user.view",
         "user.update",
         "user.deactivate",
+        "tenant.create",
         "tenant.view",
+        "tenant.update",
+        "tenant.archive",
         "tenant.view_ni",
+        "apartment.create",
         "apartment.view",
+        "apartment.update",
+        "lease.create",
         "lease.view",
+        "lease.update",
+        "lease.terminate",
+        "invoice.create",
         "invoice.view",
+        "invoice.void",
+        "payment.create",
         "payment.view",
+        "maintenance.create",
         "maintenance.view",
+        "maintenance.update",
+        "maintenance.assign",
+        "complaint.create",
         "complaint.view",
+        "complaint.update",
+        "complaint.assign",
         "report.local",
         "report.crosscity",
         "report.finance",
         "city.create",
         "city.view",
         "audit_log.view",
-],
-
+        "notification.send",
+    ],
 }
 
 ROLE_DESCRIPTIONS = {
@@ -136,7 +162,6 @@ def seed():
         for role_name, perms in ROLE_PERMISSIONS.items():
             existing = db.query(Role).filter(Role.name == role_name).first()
             if existing:
-                # Update permissions in case they changed
                 existing.permissions = ",".join(perms)
                 role_map[role_name] = existing
             else:
@@ -170,7 +195,7 @@ def seed():
                 full_name="System Administrator",
                 email="admin@paragon.co.uk",
                 role_id=admin_role.id,
-                city_id=None,       # manager = cross-city, no city scope
+                city_id=None,
                 is_active=True,
             )
             db.add(admin)

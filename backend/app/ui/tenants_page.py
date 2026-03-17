@@ -10,7 +10,7 @@ from ttkbootstrap.dialogs import Messagebox
 
 from app.db.database import SessionLocal
 from app.db.models import Tenant
-from app.services.tenant_service import search_tenants, archive_tenant
+from app.services.tenant_service import search_tenants, archive_tenant, unarchive_tenant
 from sqlalchemy.orm import joinedload
 
 
@@ -30,6 +30,16 @@ class TenantsPage(tb.Frame):
         except Exception:
             pass
         super().destroy()
+
+    def _refresh_db(self):
+        """Close and recreate the session to avoid MySQL REPEATABLE READ caching."""
+        try:
+            self.db.close()
+        except Exception:
+            pass
+        from app.db.database import SessionLocal
+        self.db = SessionLocal()
+
 
     # ── UI ────────────────────────────────────────────────────────────────
     def _build_ui(self):
@@ -52,15 +62,28 @@ class TenantsPage(tb.Frame):
                       bootstyle="primary", padding=(10, 6),
                       command=self._open_lease_dialog).pack(side=LEFT, padx=(0, 6))
 
+        if self.user.has_permission("lease.view"):
+            tb.Button(btn_bar, text="📋  View Leases",
+                      bootstyle="info", padding=(10, 6),
+                      command=self._view_leases).pack(side=LEFT, padx=(0, 6))
+
         if self.user.has_permission("tenant.update"):
             tb.Button(btn_bar, text="✎  Edit",
                       bootstyle="secondary", padding=(10, 6),
                       command=self._edit_selected).pack(side=LEFT, padx=(0, 6))
 
+        if self.user.has_permission("lease.terminate"):
+            tb.Button(btn_bar, text="✂  End Lease",
+                      bootstyle="danger", padding=(10, 6),
+                      command=self._open_termination_dialog).pack(side=LEFT, padx=(0, 6))
+
         if self.user.has_permission("tenant.archive"):
             tb.Button(btn_bar, text="🗃  Archive",
                       bootstyle="warning", padding=(10, 6),
-                      command=self._archive_selected).pack(side=LEFT)
+                      command=self._archive_selected).pack(side=LEFT, padx=(0, 6))
+            tb.Button(btn_bar, text="♻  Reactivate",
+                      bootstyle="success", padding=(10, 6),
+                      command=self._reactivate_selected).pack(side=LEFT)
 
         tb.Separator(self, orient=HORIZONTAL).pack(fill=X, padx=20)
 
@@ -121,7 +144,7 @@ class TenantsPage(tb.Frame):
 
     # ── Data ──────────────────────────────────────────────────────────────
     def load_tenants(self, *_):
-        self.db.expire_all()
+        self._refresh_db()
         for row in self.tree.get_children():
             self.tree.delete(row)
 
@@ -185,7 +208,7 @@ class TenantsPage(tb.Frame):
             Messagebox.show_warning("Please select a tenant to edit.", title="No Selection")
             return
         from app.ui.add_tenant_dialog import AddTenantDialog
-        self.db.expire_all()
+        self._refresh_db()
         tenant = self.db.query(Tenant).filter(Tenant.id == tid).first()
         if not tenant:
             return
@@ -193,10 +216,34 @@ class TenantsPage(tb.Frame):
         self.wait_window(dlg)
         self.load_tenants()
 
+    def _view_leases(self):
+        tid = self._selected_tenant_id()
+        if tid is None:
+            Messagebox.show_warning("Please select a tenant to view their leases.", title="No Selection")
+            return
+        tenant = self.db.query(Tenant).filter(Tenant.id == tid).first()
+        if not tenant:
+            return
+        from app.ui.tenant_leases_panel import TenantLeasesPanel
+        dlg = TenantLeasesPanel(self, user=self.user,
+                                tenant_id=tid, tenant_name=tenant.full_name)
+        self.wait_window(dlg)
+        self.load_tenants()
+
     def _open_lease_dialog(self):
         tid = self._selected_tenant_id()
         from app.ui.create_lease_dialog import CreateLeaseDialog
         dlg = CreateLeaseDialog(self, user=self.user, preselected_tenant_id=tid)
+        self.wait_window(dlg)
+        self.load_tenants()
+
+    def _open_termination_dialog(self):
+        tid = self._selected_tenant_id()
+        if tid is None:
+            Messagebox.show_warning("Please select a tenant to terminate their lease.", title="No Selection")
+            return
+        from app.ui.early_termination_dialog import EarlyTerminationDialog
+        dlg = EarlyTerminationDialog(self, user=self.user, tenant_id=tid)
         self.wait_window(dlg)
         self.load_tenants()
 
@@ -211,6 +258,19 @@ class TenantsPage(tb.Frame):
         )
         if confirm == "Yes":
             archive_tenant(self.db, tid)
+            self.load_tenants()
+
+    def _reactivate_selected(self):
+        tid = self._selected_tenant_id()
+        if tid is None:
+            Messagebox.show_warning("Please select an inactive tenant to reactivate.", title="No Selection")
+            return
+        confirm = Messagebox.yesno(
+            "Reactivate this tenant? They will appear in active lists again.",
+            title="Confirm Reactivate",
+        )
+        if confirm == "Yes":
+            unarchive_tenant(self.db, tid)
             self.load_tenants()
 
     def _view_selected(self):

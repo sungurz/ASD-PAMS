@@ -107,16 +107,18 @@ class FinancePage(tb.Frame):
         tbl_frame = tb.Frame(f, padding=(12, 4, 12, 0))
         tbl_frame.pack(fill=BOTH, expand=YES)
 
-        cols = ("id", "invoice_num", "tenant", "period", "amount", "due_date", "status")
+        cols = ("id", "invoice_num", "tenant", "period", "amount", "paid", "remaining", "due_date", "status")
         self.inv_tree = tb.Treeview(tbl_frame, columns=cols, show="headings",
                                     bootstyle="dark", selectmode="browse")
 
         col_cfg = [
             ("id",          "ID",          50,  CENTER),
-            ("invoice_num", "Invoice #",   130, W),
-            ("tenant",      "Tenant",      200, W),
-            ("period",      "Period",      130, CENTER),
-            ("amount",      "Amount",      90,  CENTER),
+            ("invoice_num", "Invoice #",   120, W),
+            ("tenant",      "Tenant",      160, W),
+            ("period",      "Period",      120, CENTER),
+            ("amount",      "Total",       90,  CENTER),
+            ("paid",        "Paid",        90,  CENTER),
+            ("remaining",   "Remaining",   90,  CENTER),
             ("due_date",    "Due Date",    100, CENTER),
             ("status",      "Status",      90,  CENTER),
         ]
@@ -217,7 +219,23 @@ class FinancePage(tb.Frame):
         self.load_payments()
         self.load_arrears()
 
+    def destroy(self):
+        try:
+            self.db.close()
+        except Exception:
+            pass
+        super().destroy()
+
+    def _refresh_db(self):
+        try:
+            self.db.close()
+        except Exception:
+            pass
+        from app.db.database import SessionLocal as _SL
+        self.db = _SL()
+
     def load_invoices(self, *_):
+        self._refresh_db()
         for row in self.inv_tree.get_children():
             self.inv_tree.delete(row)
 
@@ -227,18 +245,34 @@ class FinancePage(tb.Frame):
             q = q.filter(Invoice.status == InvoiceStatus(status_filter.lower()))
         invoices = q.order_by(Invoice.due_date.desc()).all()
 
+        from app.db.models import Payment as _Payment
+        from sqlalchemy import func as _func
+        from decimal import Decimal as _Dec
+
+        # Batch load total paid per invoice
+        paid_rows = (
+            self.db.query(_Payment.invoice_id, _func.sum(_Payment.amount))
+            .group_by(_Payment.invoice_id)
+            .all()
+        )
+        paid_map = {row[0]: row[1] or _Dec("0") for row in paid_rows}
+
         for inv in invoices:
             tenant_name = inv.tenant.full_name if inv.tenant else "—"
             period = ""
             if inv.billing_period_start and inv.billing_period_end:
                 period = f"{inv.billing_period_start.strftime('%d %b')}–{inv.billing_period_end.strftime('%d %b %Y')}"
             tag = inv.status.value if inv.status else "draft"
+            paid      = paid_map.get(inv.id, _Dec("0"))
+            remaining = max(inv.amount - paid, _Dec("0"))
             self.inv_tree.insert("", END, tags=(tag,), values=(
                 inv.id,
                 inv.invoice_number,
                 tenant_name,
                 period,
                 f"£{inv.amount:,.2f}",
+                f"£{paid:,.2f}",
+                f"£{remaining:,.2f}",
                 inv.due_date.strftime("%d %b %Y") if inv.due_date else "—",
                 inv.status.value.title() if inv.status else "—",
             ))

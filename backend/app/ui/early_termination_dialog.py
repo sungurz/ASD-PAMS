@@ -1,10 +1,8 @@
 """
-Dialog for submitting an early lease termination request.
-
-Rules (enforced by lease_service):
-  - Minimum 30 days notice from today.
-  - Penalty = 5% of agreed monthly rent.
-  - Only active leases can be terminated early.
+app/ui/early_termination_dialog.py
+====================================
+Dialog for early lease termination.
+Terminates immediately — no separate approval step.
 """
 
 import ttkbootstrap as tb
@@ -16,17 +14,13 @@ from decimal import Decimal
 from app.db.database import SessionLocal
 from app.db.models import LeaseAgreement, LeaseStatus
 from app.services.lease_service import (
-    request_early_termination, calculate_penalty, get_tenant_active_lease
+    request_early_termination, calculate_penalty,
+    get_tenant_active_lease, approve_termination
 )
 from sqlalchemy.orm import joinedload
 
 
 class EarlyTerminationDialog(tb.Toplevel):
-    """
-    Opens with a tenant_id or lease_id.
-    Shows the lease details and calculates the penalty live
-    as the intended end date is typed.
-    """
 
     def __init__(self, parent, user,
                  tenant_id: int | None = None,
@@ -35,7 +29,6 @@ class EarlyTerminationDialog(tb.Toplevel):
         self.user = user
         self.db   = SessionLocal()
 
-        # Load the lease
         if lease_id:
             self.lease = (
                 self.db.query(LeaseAgreement)
@@ -54,58 +47,60 @@ class EarlyTerminationDialog(tb.Toplevel):
         self.title("Early Termination Request")
         self.resizable(False, False)
         self.grab_set()
-
         self._build_ui()
         self._center(parent)
 
-    # ── UI 
     def _build_ui(self):
-        self.geometry("460x480")
-        f = tb.Frame(self, padding=24)
+        self.geometry("480x600")
+
+        # Buttons FIRST — anchors to bottom always
+        btn_row = tb.Frame(self, padding=(20, 0, 20, 16))
+        btn_row.pack(side=BOTTOM, fill=X)
+        tb.Button(btn_row, text="Cancel", bootstyle="secondary",
+                  command=self.destroy).pack(side=RIGHT, padx=(6, 0))
+        tb.Button(btn_row, text="Confirm Termination", bootstyle="danger",
+                  command=self._submit).pack(side=RIGHT)
+
+        f = tb.Frame(self, padding=(20, 16, 20, 8))
         f.pack(fill=BOTH, expand=YES)
 
         tb.Label(f, text="Early Lease Termination",
-                 font=("Georgia", 16, "bold")).pack(anchor=W, pady=(0, 4))
+                 font=("Georgia", 16, "bold")).pack(anchor=W, pady=(0, 12))
 
         if not self.lease:
             tb.Label(f, text="No active lease found for this tenant.",
                      bootstyle="danger").pack(pady=20)
-            tb.Button(f, text="Close", command=self.destroy).pack()
             return
 
-        # Lease summary card
         card = tb.Frame(f, bootstyle="dark", padding=12)
-        card.pack(fill=X, pady=(0, 16))
+        card.pack(fill=X, pady=(0, 12))
 
         tenant_name = self.lease.tenant.full_name if self.lease.tenant else "Unknown"
         apt_unit    = self.lease.apartment.unit_number if self.lease.apartment else "—"
 
-        tb.Label(card, text=f"Tenant:      {tenant_name}",
-                 font=("Helvetica", 11)).pack(anchor=W)
-        tb.Label(card, text=f"Apartment:   Unit {apt_unit}",
-                 font=("Helvetica", 11)).pack(anchor=W)
-        tb.Label(card, text=f"Lease start: {self.lease.start_date.strftime('%d %b %Y')}",
-                 font=("Helvetica", 11)).pack(anchor=W)
-        tb.Label(card, text=f"Lease end:   {self.lease.end_date.strftime('%d %b %Y')}",
-                 font=("Helvetica", 11)).pack(anchor=W)
+        for text in [
+            f"Tenant:       {tenant_name}",
+            f"Apartment:    Unit {apt_unit}",
+            f"Lease start:  {self.lease.start_date.strftime('%d %b %Y')}",
+            f"Lease end:    {self.lease.end_date.strftime('%d %b %Y')}",
+        ]:
+            tb.Label(card, text=text, font=("Helvetica", 11)).pack(anchor=W)
         tb.Label(card, text=f"Monthly rent: £{self.lease.agreed_rent:,.2f}",
                  font=("Helvetica", 11, "bold")).pack(anchor=W)
 
-        # Rules notice
         min_date = date.today() + timedelta(days=30)
         notice = tb.Frame(f, bootstyle="warning", padding=10)
-        notice.pack(fill=X, pady=(0, 14))
+        notice.pack(fill=X, pady=(0, 12))
         tb.Label(
             notice,
-            text=f"⚠️  Minimum 30 days notice required.\n"
-                 f"   Earliest end date: {min_date.strftime('%d %b %Y')}\n"
-                 f"   Penalty: 5% of monthly rent",
+            text=f"Minimum 30 days notice required.\n"
+                 f"Earliest end date: {min_date.strftime('%d %b %Y')}\n"
+                 f"Penalty: 5% of monthly rent",
             font=("Helvetica", 10),
             bootstyle="warning",
             justify=LEFT,
         ).pack(anchor=W)
 
-        # Intended end date
         def lbl(text):
             tb.Label(f, text=text, font=("Helvetica", 10),
                      bootstyle="secondary").pack(anchor=W)
@@ -116,31 +111,21 @@ class EarlyTerminationDialog(tb.Toplevel):
         self.v_end_date.pack(fill=X, pady=(2, 4))
         self.v_end_date.bind("<KeyRelease>", self._update_penalty)
 
-        # Live penalty display
         self._penalty_var = tb.StringVar()
         penalty = calculate_penalty(self.lease.agreed_rent)
         self._penalty_var.set(f"Penalty amount: £{penalty:,.2f}")
         tb.Label(f, textvariable=self._penalty_var,
-                 font=("Helvetica", 12, "bold"), bootstyle="danger").pack(anchor=W, pady=(0, 12))
+                 font=("Helvetica", 12, "bold"), bootstyle="danger").pack(anchor=W, pady=(0, 10))
 
         lbl("Reason for early termination")
-        self.v_reason = tb.Text(f, font=("Helvetica", 12), height=4)
+        self.v_reason = tb.Text(f, font=("Helvetica", 12), height=3)
         self.v_reason.pack(fill=X, pady=(2, 0))
 
-        # Buttons
-        btn_row = tb.Frame(f)
-        btn_row.pack(fill=X, pady=(16, 0))
-        tb.Button(btn_row, text="Cancel", bootstyle="secondary",
-                  command=self.destroy).pack(side=RIGHT, padx=(6, 0))
-        tb.Button(btn_row, text="Submit Request", bootstyle="danger",
-                  command=self._submit).pack(side=RIGHT)
-
-    # ── Live penalty update 
     def _update_penalty(self, _event=None):
-        penalty = calculate_penalty(self.lease.agreed_rent)
-        self._penalty_var.set(f"Penalty amount: £{penalty:,.2f}")
+        if self.lease:
+            penalty = calculate_penalty(self.lease.agreed_rent)
+            self._penalty_var.set(f"Penalty amount: £{penalty:,.2f}")
 
-    # ── Helpers
     def _parse_date(self, text: str) -> date | None:
         text = text.strip()
         for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
@@ -153,12 +138,11 @@ class EarlyTerminationDialog(tb.Toplevel):
 
     def _center(self, parent):
         self.update_idletasks()
-        w, h = 460, 480
+        w, h = 480, 600
         px = parent.winfo_rootx() + (parent.winfo_width()  - w) // 2
         py = parent.winfo_rooty() + (parent.winfo_height() - h) // 2
         self.geometry(f"{w}x{h}+{px}+{py}")
 
-    # ── Submit 
     def _submit(self):
         if not self.lease:
             return
@@ -179,18 +163,28 @@ class EarlyTerminationDialog(tb.Toplevel):
             reason=reason,
             requested_by_user_id=self.user.id,
         )
-
         if error:
-            Messagebox.show_warning(error, title="Cannot Submit Request", parent=self)
+            Messagebox.show_warning(error, title="Cannot Terminate", parent=self)
+            return
+
+        ok, err2 = approve_termination(
+            self.db,
+            req.id,
+            reviewed_by_user_id=self.user.id,
+        )
+        if not ok:
+            Messagebox.show_warning(err2, title="Termination Error", parent=self)
             return
 
         penalty = calculate_penalty(self.lease.agreed_rent)
-        Messagebox.show_info(
-            f"Termination request submitted.\n\n"
-            f"Intended end date: {end_date.strftime('%d %b %Y')}\n"
-            f"Penalty: £{penalty:,.2f}\n\n"
-            f"The request is pending approval by a Location Admin.",
-            title="Request Submitted",
-            parent=self,
-        )
+        # Destroy dialog FIRST so message appears on top
+        parent_win = self.master
         self.destroy()
+        Messagebox.show_info(
+            f"Lease terminated successfully.\n"
+            f"End date: {end_date.strftime('%d %b %Y')}\n"
+            f"Penalty applied: £{penalty:,.2f}\n"
+            f"Apartment returned to Available.",
+            title="Lease Terminated",
+            parent=parent_win,
+        )

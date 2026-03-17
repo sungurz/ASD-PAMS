@@ -1,4 +1,6 @@
 """
+app/services/tenant_service.py
+================================
 Business logic for tenant registration, search, and management.
 UI layer calls these functions — never writes to DB directly.
 """
@@ -10,7 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.db.models import Tenant, TenantReference, ApartmentType
 
 
-# ── Helpers 
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _mask_ni(ni: str) -> str:
     """Return a masked version: 'AB 12 34 56 C' → 'AB ** ** 56 C'"""
@@ -25,7 +27,7 @@ def _hash_ni(ni: str) -> str:
     return hashlib.sha256(ni.upper().strip().replace(" ", "").encode()).hexdigest()
 
 
-# ── Core CRUD 
+# ── Core CRUD ─────────────────────────────────────────────────────────────────
 
 def register_tenant(
     db: Session,
@@ -132,11 +134,46 @@ def update_tenant(
 
 
 def archive_tenant(db: Session, tenant_id: int) -> bool:
-    """Soft-delete: mark tenant as inactive."""
+    """Soft-delete: mark tenant as inactive.
+    Also cancels open maintenance tickets and voids unpaid invoices."""
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         return False
     tenant.is_active = False
+
+    # Cancel open maintenance tickets linked to this tenant
+    from app.services.maintenance_service import cancel_open_tickets_for_tenant
+    cancel_open_tickets_for_tenant(db, tenant_id)
+
+    # Void any unpaid invoices for this tenant's leases
+    from app.db.models import LeaseAgreement, LeaseStatus
+    from app.services.invoice_service import void_invoices_for_lease
+    active_leases = (
+        db.query(LeaseAgreement)
+        .filter(
+            LeaseAgreement.tenant_id == tenant_id,
+            LeaseAgreement.status == LeaseStatus.ACTIVE,
+        )
+        .all()
+    )
+    for lease in active_leases:
+        lease.status = LeaseStatus.EXPIRED
+        from app.db.models import Apartment, ApartmentStatus
+        apt = db.query(Apartment).filter(Apartment.id == lease.apartment_id).first()
+        if apt:
+            apt.status = ApartmentStatus.AVAILABLE
+        void_invoices_for_lease(db, lease.id)
+
+    db.commit()
+    return True
+
+
+def unarchive_tenant(db: Session, tenant_id: int) -> bool:
+    """Reactivate a previously archived tenant."""
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        return False
+    tenant.is_active = True
     db.commit()
     return True
 
