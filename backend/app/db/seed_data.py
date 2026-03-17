@@ -29,7 +29,6 @@ ROLE_PERMISSIONS = {
         "tenant.create",
         "tenant.view",
         "tenant.update",
-        "tenant.archive",
         "lease.create",
         "lease.view",
         "apartment.view",
@@ -54,8 +53,6 @@ ROLE_PERMISSIONS = {
         "late_payment.view",
         "late_payment.flag",
         "report.finance",
-        "tenant.view",
-        "lease.view",
     ],
     RoleName.MAINTENANCE_STAFF: [
         "maintenance.view",
@@ -63,7 +60,6 @@ ROLE_PERMISSIONS = {
         "maintenance.update",
         "maintenance.close",
         "apartment.view",
-        "tenant.view",
     ],
     RoleName.LOCATION_ADMIN: [
         # Full control within their city
@@ -96,7 +92,6 @@ ROLE_PERMISSIONS = {
         "complaint.view",
         "complaint.update",
         "complaint.assign",
-        "report.local",
         "audit_log.view",
         "notification.send",
     ],
