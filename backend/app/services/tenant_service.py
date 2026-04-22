@@ -1,3 +1,4 @@
+# Ahmet (24034408) Efe Genc (23001693)  ·  Dan McNamara (23037788)
 """
 app/services/tenant_service.py
 ================================
@@ -15,11 +16,27 @@ from app.db.models import Tenant, TenantReference, ApartmentType
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _mask_ni(ni: str) -> str:
-    """Return a masked version: 'AB 12 34 56 C' → 'AB ** ** 56 C'"""
-    ni = ni.upper().strip().replace(" ", "")
-    if len(ni) < 9:
-        return ni
-    return f"{ni[:2]} ** ** {ni[6:8]} {ni[8]}"
+    """
+    Return a masked version regardless of input length.
+    'AB 12 34 56 C' → 'AB ** ** 56 C'
+    'SX982198'      → 'SX ** ** 19 *'
+    'SXZ84N'        → 'SX **** N'
+    Raw NI is NEVER stored — always masked before hitting the DB.
+    """
+    raw = ni.upper().strip().replace(" ", "")
+    if len(raw) == 0:
+        return ""
+    if len(raw) >= 9:
+        # Full NI: AB 12 34 56 C
+        return f"{raw[0:2]} ** ** {raw[6:8]} {raw[8]}"
+    elif len(raw) >= 4:
+        # Short/partial: keep first 2 + last char, mask middle
+        prefix = raw[0:2]
+        suffix = raw[-1]
+        return f"{prefix} **** {suffix}"
+    else:
+        # Too short — mask entirely except first char
+        return f"{raw[0]}*****"
 
 
 def _hash_ni(ni: str) -> str:

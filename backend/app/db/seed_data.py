@@ -1,3 +1,4 @@
+# Efe Genc (23001693)
 """
 Seeds the database with:
   1. All 6 roles with their permission sets

@@ -1,3 +1,4 @@
+# Ahmet (24034408) Efe Genc (23001693)  ·  Dan McNamara (23037788)
 """
 app/ui/add_tenant_dialog.py
 ============================
@@ -307,9 +308,15 @@ class AddTenantDialog(tb.Toplevel):
         if t.preferred_apartment_type:
             self.v_apt_type.set(t.preferred_apartment_type.value)
 
-        # NI shown masked in edit mode for authorised roles
+        # NI field in edit mode:
+        # Roles with tenant.view_ni (Manager, Location Admin) — show masked
+        # value and keep field editable so they can update it.
+        # All other roles — field stays blank and disabled.
         if self.v_ni and t.ni_number_masked:
             self.v_ni.insert(0, t.ni_number_masked)
+            if not self.user.has_permission("tenant.view_ni"):
+                self.v_ni.configure(state="disabled")
+            # If they have view_ni, field stays normal/editable
 
     def _create_login(self):
         """Create a user account for this tenant and link it."""
@@ -362,7 +369,16 @@ class AddTenantDialog(tb.Toplevel):
 
         dob      = self._parse_date(self.v_dob.get())
         move_in  = self._parse_date(self.v_move_in.get())
-        ni_raw   = self.v_ni.get().strip() if self.v_ni else None
+        ni_typed = self.v_ni.get().strip() if self.v_ni else ""
+        # If editing and field contains asterisks, it's the existing masked
+        # value — don't re-process it, leave NI unchanged.
+        # Only update NI if a genuinely new raw value was entered.
+        if self.editing and '*' in ni_typed:
+            ni_raw = None  # already masked, no change needed
+        elif ni_typed:
+            ni_raw = ni_typed  # new value — will be masked by service layer
+        else:
+            ni_raw = None  # blank — no change
 
         try:
             income = float(self.v_income.get()) if self.v_income.get().strip() else None

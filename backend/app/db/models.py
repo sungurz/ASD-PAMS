@@ -1,3 +1,4 @@
+# Ahmet (24034408) Efe Genc (23001693)  ·  Dan McNamara (23037788)
 """
 Paragon Property Management System — Full Domain Model
 Schema covers all modules required by the case study:

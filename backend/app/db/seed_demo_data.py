@@ -1,3 +1,4 @@
+# Ahmet (24034408) Efe Genc (23001693)  ·  Dan McNamara (23037788)
 """
 app/db/seed_demo_data.py
 =========================

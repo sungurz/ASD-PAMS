@@ -1,0 +1,21 @@
+fa52757 | Ahmet Sungur | 2026-04-01 | updated .gitignore file
+ab0490c | Ahmet Sungur | 2026-04-01 | Remove virtual environment and unnecessary folders
+df19a1c | Ahmet Sungur | 2026-04-01 | Remove unnecessary environment folders
+d76f75e | Ahmet Sungur | 2026-03-24 | Remove DS_Store files and add to gitignore
+02b5fa8 | Ahmet Sungur | 2026-03-24 | fixed bugs related to tenant dashbaord
+1073e29 | Ahmet Sungur | 2026-03-17 | l
+88cdd58 | Ahmet Sungur | 2026-03-17 | First prototype is completed
+ddeecdf | Ahmet Sungur | 2026-03-17 | now admin can see the multiple leases of one tenant
+58a15a7 | Ahmet Sungur | 2026-03-04 | tenant features added
+0852f37 | Ahmet Sungur | 2026-03-04 |  finished front-end
+0512e95 | Ahmet Sungur | 2026-03-04 | user permissions
+018c564 | Ahmet Sungur | 2026-03-04 | ui improvements and added more functinalities
+deff22f | Ahmet Sungur | 2026-03-04 | Database schema created, switched to ttkbootstrap as PyQt was causing issues on silicon chip macs
+dc04e68 | Ahmet Sungur | 2026-03-02 | login service and login dashboard for staff in progress
+b35e847 | Ahmet Sungur | 2026-02-26 | created users table in db
+36cdf39 | Ahmet Sungur | 2026-02-26 |  login system + rbac + password hashing completed
+3d9458d | Ahmet Sungur | 2026-02-26 | login system + RBAC + Password hashing in progress
+4b5e0c5 | Efe Genc | 2026-02-26 | New file
+ecad994 | Efe Genc | 2026-02-26 | new file
+8d9c37f | Efe Genc | 2026-02-26 | new file
+5571e53 | Ahmet Sungur | 2026-02-26 | Initial backend structure

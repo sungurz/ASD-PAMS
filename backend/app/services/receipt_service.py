@@ -1,3 +1,4 @@
+# Efe Genc (23001693)  ·  Dan McNamara (23037788)
 """
 Auto-generates a receipt after every successful payment.
 Receipt number format: RCP-YYYY-NNNN

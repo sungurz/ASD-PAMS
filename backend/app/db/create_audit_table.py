@@ -1,11 +1,4 @@
-"""
-app/db/create_audit_table.py
-==============================
-Creates the audit_logs table in the existing database.
-Run ONCE after the main tables have been created.
-
-    python -m app.db.create_audit_table
-"""
+# Ahmet (24034408) Efe Genc (23001693)  ·  Dan McNamara (23037788)
 
 from app.db.database import engine, SessionLocal
 from sqlalchemy import text

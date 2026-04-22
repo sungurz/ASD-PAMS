@@ -1,21 +1,4 @@
-"""
-app/auth/permissions.py
-=======================
-Central permission checking for Paragon.
-
-Usage:
-    from app.auth.permissions import has_permission
-
-    if has_permission(user, "tenant.create"):
-        # show the button / allow the action
-
-Permission keys follow the pattern:  "module.action"
-The full list lives in app/db/seed_data.py (ROLE_PERMISSIONS).
-
-The user's permission set is cached on the user object after the
-first check so we never hit the DB more than once per session.
-"""
-
+# Ahmet (24034408) 
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
