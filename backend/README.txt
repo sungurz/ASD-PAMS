@@ -33,12 +33,32 @@ Create a .env file inside backend/ with:
 
 LOGIN CREDENTIALS
 -----------------
-System Admin:     admin / admin123
-Bristol Admin:    bristol_admin / Bristol123
-London Admin:     london_admin / London123
-Cardiff Admin:    cardiff_admin / Cardiff123
-Manchester Admin: manchester_admin / Manchester123
-Finance Manager:  bristol_finance / Bristol123
-Front Desk:       bristol_desk / Bristol123
-Maintenance:      bristol_maint1 / Bristol123
+System Admin:     admin / admin123 
+-----------------
+BRISTOL
+-------
+Role: Location Admin      | Username: bristol_admin    | Password: Bristol123
+Role: Finance Manager     | Username: bristol_finance  | Password: Bristol123
+Role: Front Desk          | Username: bristol_desk     | Password: Bristol123
+Role: Maintenance Staff   | Username: bristol_maint1   | Password: Bristol123
+Role: Maintenance Staff   | Username: bristol_maint2   | Password: Bristol123
+ 
+LONDON
+------
+Role: Location Admin      | Username: london_admin     | Password: London123
+Role: Finance Manager     | Username: london_finance   | Password: London123
+Role: Front Desk          | Username: london_desk      | Password: London123
+Role: Maintenance Staff   | Username: london_maint1    | Password: London123
+ 
+CARDIFF
+-------
+Role: Location Admin      | Username: cardiff_admin    | Password: Cardiff123
+Role: Front Desk          | Username: cardiff_desk     | Password: Cardiff123
+Role: Maintenance Staff   | Username: cardiff_maint1   | Password: Cardiff123
+ 
+MANCHESTER
+----------
+Role: Location Admin      | Username: manchester_admin    | Password: Manchester123
+Role: Front Desk          | Username: manchester_desk     | Password: Manchester123
+Role: Maintenance Staff   | Username: manchester_maint1   | Password: Manchester123
 ================================================================================
